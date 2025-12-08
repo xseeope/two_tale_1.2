@@ -1,0 +1,299 @@
+
+======================================================================
+TABLE REPLICATION FOR 'A TALE OF TWO PREMIUMS'
+======================================================================
+Start time: 2025-12-07 15:01:35
+
+======================================================================
+LOADING PROCESSED DATA
+======================================================================
+✓ Loaded LE    - 771 observations
+✓ Loaded CT    - 977 observations
+✓ Loaded KE    - 2313 observations
+✓ Loaded SI    - 792 observations
+✓ Loaded ZM    - 771 observations
+✓ Loaded HO    - 932 observations
+✓ Loaded LB    - 771 observations
+✓ Loaded RR    - 771 observations
+✓ Loaded ZC    - 772 observations
+✓ Loaded CL    - 2762 observations
+✓ Loaded HE    - 771 observations
+✓ Loaded GF    - 771 observations
+✓ Loaded HG    - 770 observations
+✓ Loaded SB    - 973 observations
+✓ Loaded GC    - 922 observations
+✓ Loaded ZW    - 2313 observations
+✓ Loaded NG    - 2217 observations
+✓ Loaded ZS    - 1173 observations
+✓ Loaded PL    - 770 observations
+✓ Loaded KC    - 973 observations
+✓ Loaded CC    - 973 observations
+✓ Loaded ZL    - 771 observations
+✓ Loaded OJ    - 770 observations
+✓ Loaded PA    - 770 observations
+✓ Loaded ZO    - 771 observations
+
+✓ Total: 27,340 observations across 25 commodities
+
+======================================================================
+CALCULATING ADDITIONAL VARIABLES
+======================================================================
+✓ Calculated |Q| variables
+✓ Calculated position changes
+✓ Calculated lagged returns
+✓ Calculated historical volatility
+✓ Calculated Basis and S*v_t (with log transformation)
+⚠ Could not load SPX data: Only valid with DatetimeIndex, TimedeltaIndex or P
+⚠ Could not load VIX data: Only valid with DatetimeIndex, TimedeltaIndex or P
+
+======================================================================
+TABLE I: SUMMARY STATISTICS
+======================================================================
+
+✓ Table I saved to output/tables/table_I_summary_statistics.csv
+
+Panel A: Excess Returns and Hedging Pressure (5 columns)
+ Ticker  Excess_Ret_Mean  Excess_Ret_Std   HP_Mean   HP_Std  Prob_HP_Pos
+     CC         0.027648        0.271011  0.145122 0.166764     0.760534
+     CL         0.030964        0.192433  0.014619 0.146699     0.575308
+     CT         0.066127        0.293973  0.102623 0.262408     0.676561
+     GC         0.088086        0.168660  0.376168 0.133003     1.000000
+     GF         0.053560        0.172955 -0.091439 0.089676     0.164721
+     HE         0.081158        0.343241  0.023465 0.124287     0.591440
+     HG         0.137643        0.270323  0.014178 0.191790     0.500000
+     HO         0.096647        0.310077  0.105708 0.110073     0.839056
+     KC         0.077089        0.290993  0.094014 0.159368     0.656732
+     KE         0.019023        0.178254  0.042524 0.150017     0.567661
+     LB         0.109772        0.354406  0.083027 0.216911     0.587549
+     LE         0.045841        0.185412  0.066285 0.113534     0.670558
+     NG         0.028241        0.302376 -0.002223 0.111854     0.497068
+     OJ         0.091832        0.362416  0.273390 0.229404     0.883117
+     PA         0.163410        0.362526  0.539881 0.178333     0.985714
+     PL         0.060315        0.246477  0.564902 0.161122     0.997403
+     RR         0.108475        0.270212  0.123356 0.261895     0.638132
+     SB         0.082916        0.307500  0.128636 0.154260     0.763618
+     SI         0.134638        0.325693  0.383973 0.159272     1.000000
+     ZC         0.075496        0.315346  0.040575 0.114266     0.615285
+     ZL         0.063305        0.253860  0.123408 0.151702     0.760052
+     ZM         0.097115        0.332810  0.194688 0.142111     0.875486
+     ZO         0.090334        0.399222  0.277007 0.200806     0.893645
+     ZS         0.046975        0.222394  0.092609 0.137821     0.778346
+     ZW         0.023875        0.191833  0.042524 0.150017     0.567661
+AVERAGE         0.076020        0.276976  0.150361 0.160696     0.713826
+
+Panel B: Trading Activity (4 columns)
+ Ticker  |Q_Comm|_Mean  |Q_NonComm|_Mean  PT_Comm_Mean  PT_NonComm_Mean
+     RR       0.037659          0.028689      0.056918         0.088621
+     SB       0.115754          0.085742      0.292549         4.136386
+     SI       0.174067          0.125145      0.428855         0.457411
+     ZC       0.044446          0.048809      0.543753         0.107551
+     ZL       0.033502          0.027170      0.042539         0.088375
+     ZM       0.031095          0.024862      0.041066         0.087558
+     ZO       0.042246          0.033071      0.066441         0.119416
+     ZS       1.065083          1.141385           inf         3.781662
+     ZW       0.277613          0.236443      1.595568         3.551425
+AVERAGE       0.222003          0.202418           inf              inf
+
+======================================================================
+TABLE II: WEEKLY POSITION CHANGES AND RETURNS
+======================================================================
+
+Regression 1: Q_Commercial ~ Ret_t
+Variable  Coefficient  Std_Error     t_stat  N_months  p_value
+   const    -0.144318   0.008587 -16.806446       771 0.000000
+     Ret    -0.596893   0.276316  -2.160186       771 0.031066
+
+Regression 2: Q_Commercial ~ Ret_{t-1} + Q_{t-1}
+   Variable  Coefficient  Std_Error     t_stat  N_months  p_value
+      const    -0.156768   0.009350 -16.767172       770 0.000000
+   Ret_lag1    -0.323196   0.212391  -1.521705       770 0.128494
+Q_Comm_lag1    -0.154487   0.011959 -12.917799       770 0.000000
+
+Regression 3: Q_NonCommercial ~ Ret_t
+Variable  Coefficient  Std_Error    t_stat  N_months  p_value
+   const     0.150012   0.008301 18.072451       771 0.000000
+     Ret     0.453964   0.267998  1.693909       771 0.090687
+
+Regression 4: Q_NonCommercial ~ Ret_{t-1} + Q_{t-1}
+      Variable  Coefficient  Std_Error     t_stat  N_months  p_value
+         const     0.164667   0.008988  18.320860       770 0.000000
+      Ret_lag1     0.354556   0.205866   1.722263       770 0.085424
+Q_NonComm_lag1    -0.169998   0.013578 -12.519697       770 0.000000
+
+Regression 5: Delta_NonReportable ~ Ret_t
+Variable  Coefficient   Std_Error    t_stat  N_months      p_value
+   const   -16.939681   46.137256 -0.367158       771 7.136018e-01
+     Ret 16203.616295 1942.590033  8.341243       771 2.220446e-16
+
+Regression 6: Delta_NonReportable ~ Ret_{t-1}
+Variable  Coefficient   Std_Error    t_stat  N_months  p_value
+   const   -25.836295   46.092073 -0.560537       770 0.575277
+Ret_lag1 -3325.122702 2105.240032 -1.579451       770 0.114644
+
+✓ Table II saved to output/tables/table_II_position_changes.xlsx
+
+======================================================================
+TABLE III: RETURN PREDICTABILITY
+======================================================================
+
+=== PREDICTIONS FOR R_{t+1} ===
+
+Model 1a: R_{t+1} ~ Q_Comm
+Variable  Coefficient  Std_Error   t_stat  N_months  p_value
+   const     0.001248   0.000519 2.402060       771 0.016539
+  Q_Comm     0.000511   0.000543 0.941531       771 0.346728
+
+Model 1b: R_{t+1} ~ Q_Comm + Basis + S*v + Ret
+Variable  Coefficient  Std_Error    t_stat  N_months  p_value
+   const     0.001595   0.000495  3.223655       762 0.001320
+  Q_Comm     0.000189   0.000672  0.281346       762 0.778522
+   Basis    -0.050243   0.023132 -2.172025       762 0.030162
+     S_v    -0.011002   0.010459 -1.051911       762 0.293174
+     Ret    -0.010883   0.010504 -1.036155       762 0.300459
+
+Model 2a: R_{t+1} ~ Q_NonComm
+ Variable  Coefficient  Std_Error    t_stat  N_months  p_value
+    const     0.001288   0.000518  2.486961       771 0.013095
+Q_NonComm    -0.000620   0.000666 -0.931378       771 0.351950
+
+Model 2b: R_{t+1} ~ Q_NonComm + Basis + S*v + Ret
+ Variable  Coefficient  Std_Error    t_stat  N_months  p_value
+    const     0.001651   0.000492  3.356116       762 0.000830
+Q_NonComm    -0.000222   0.000745 -0.297629       762 0.766068
+    Basis    -0.047470   0.023080 -2.056788       762 0.040047
+      S_v    -0.011227   0.010318 -1.088139       762 0.276878
+      Ret    -0.012115   0.010506 -1.153198       762 0.249191
+
+=== PREDICTIONS FOR R_{t+2} ===
+
+Model 3: R_{t+2} ~ Q_Comm + Basis + S*v + Ret
+Variable  Coefficient  Std_Error    t_stat  N_months  p_value
+   const     0.001796   0.000445  4.037796       762 0.000059
+  Q_Comm    -0.000035   0.000680 -0.051640       762 0.958829
+   Basis    -0.078875   0.024126 -3.269242       762 0.001127
+     S_v    -0.016620   0.010366 -1.603413       762 0.109259
+     Ret     0.017395   0.010880  1.598761       762 0.110289
+
+Model 4: R_{t+2} ~ Q_NonComm + Basis + S*v + Ret
+ Variable  Coefficient  Std_Error    t_stat  N_months  p_value
+    const     0.001715   0.000445  3.853538       762 0.000126
+Q_NonComm     0.000497   0.000858  0.579362       762 0.562516
+    Basis    -0.077993   0.024134 -3.231665       762 0.001284
+      S_v    -0.018319   0.010273 -1.783231       762 0.074947
+      Ret     0.017530   0.010936  1.602942       762 0.109362
+
+✓ Table III saved to output/tables/table_III_return_predictability.xlsx
+
+======================================================================
+TABLE IV: DCOT DATA ANALYSIS (NOT IMPLEMENTED)
+======================================================================
+⚠ DCOT data analysis skipped as specified in prompt
+
+======================================================================
+TABLE V: PORTFOLIO SORTS
+======================================================================
+
+✓ Table V saved
+ Horizon_Weeks  Q1_Return  Q2_Return  Q3_Return  Q4_Return  Q5_Return  LS_Return  LS_tstat
+             1   0.032450   0.041528   0.068984   0.073470   0.048823   0.016373  1.359915
+             5   0.034937   0.035257   0.094514   0.075028   0.038553   0.001214  0.095834
+            10   0.026354   0.051761   0.071113   0.090297   0.057909   0.031556  2.433740
+            20   0.032774   0.063051   0.060576   0.070720   0.033207   0.000433  0.032634
+            40   0.041499   0.056525   0.032400   0.072353   0.051033   0.009534  0.655405
+
+======================================================================
+TABLE VI: SMOOTHED HEDGING PRESSURE
+======================================================================
+
+=== PREDICTIONS FOR R_{t+1} ===
+
+Regression 1a: R_{t+1} ~ HP + Basis + S*v + Ret
+Variable  Coefficient  Std_Error    t_stat  N_months  p_value
+   const     0.001446   0.000488  2.961980       762 0.003152
+      HP     0.001371   0.001868  0.734135       762 0.463093
+   Basis    -0.044170   0.022841 -1.933778       762 0.053511
+     S_v    -0.014230   0.012170 -1.169307       762 0.242646
+     Ret    -0.011935   0.010404 -1.147169       762 0.251672
+
+Regression 2a: R_{t+1} ~ HP_Smooth + Basis + S*v + Ret
+     Variable  Coefficient  Std_Error    t_stat  N_months  p_value
+        const     0.001390   0.000471  2.947353       762 0.003303
+HP_Smooth_52w     0.001824   0.002445  0.746010       762 0.455892
+        Basis    -0.045364   0.022974 -1.974626       762 0.048672
+          S_v    -0.013111   0.010866 -1.206607       762 0.227958
+          Ret    -0.010120   0.010431 -0.970183       762 0.332264
+
+Regression 3a: R_{t+1} ~ HP_Smooth + Q_Comm + Basis + S*v + Ret
+     Variable  Coefficient  Std_Error    t_stat  N_months  p_value
+        const     0.001304   0.000480  2.714716       762 0.006784
+HP_Smooth_52w     0.000783   0.003186  0.245874       762 0.805846
+       Q_Comm     0.000119   0.000687  0.173488       762 0.862314
+        Basis    -0.050439   0.023331 -2.161869       762 0.030939
+          S_v    -0.009014   0.011744 -0.767541       762 0.442998
+          Ret    -0.010355   0.010683 -0.969332       762 0.332688
+
+=== PREDICTIONS FOR R_{t+2} ===
+
+Regression 1b: R_{t+2} ~ HP + Basis + S*v + Ret
+Variable  Coefficient  Std_Error    t_stat  N_months  p_value
+   const     0.001519   0.000429  3.542185       762 0.000421
+      HP     0.000580   0.001931  0.300522       762 0.763861
+   Basis    -0.076658   0.023753 -3.227285       762 0.001303
+     S_v    -0.015964   0.012227 -1.305628       762 0.192074
+     Ret     0.016694   0.010851  1.538391       762 0.124369
+
+Regression 2b: R_{t+2} ~ HP_Smooth + Basis + S*v + Ret
+     Variable  Coefficient  Std_Error    t_stat  N_months  p_value
+        const     0.001386   0.000423  3.278817       762 0.001090
+HP_Smooth_52w     0.003839   0.002575  1.490984       762 0.136380
+        Basis    -0.078916   0.023848 -3.309162       762 0.000980
+          S_v    -0.021184   0.010445 -2.028178       762 0.042890
+          Ret     0.016583   0.010773  1.539303       762 0.124146
+
+Regression 3b: R_{t+2} ~ HP_Smooth + Q_Comm + Basis + S*v + Ret
+     Variable  Coefficient  Std_Error    t_stat  N_months  p_value
+        const     0.001465   0.000435  3.371776       762 0.000785
+HP_Smooth_52w     0.004772   0.002763  1.727236       762 0.084531
+       Q_Comm    -0.000022   0.000698 -0.031547       762 0.974842
+        Basis    -0.082877   0.024042 -3.447227       762 0.000597
+          S_v    -0.020511   0.010849 -1.890621       762 0.059055
+          Ret     0.015843   0.011065  1.431810       762 0.152609
+
+✓ Table VI saved
+
+======================================================================
+TABLE VII: HEDGING PRESSURE (DCOT) (NOT IMPLEMENTED)
+======================================================================
+⚠ DCOT analysis skipped as specified in prompt
+
+======================================================================
+TABLE VIII: DOUBLE-SORTED PORTFOLIOS
+======================================================================
+
+✓ Table VIII saved
+   Portfolio  Mean_Return  Std_Return   t_stat   Sharpe  N_obs
+  LowHP_LowQ     0.042937    0.083840 1.970730 0.512134    770
+ LowHP_HighQ     0.047154    0.083607 2.170314 0.564000    770
+ HighHP_LowQ     0.029545    0.134871 0.838584 0.219064    762
+HighHP_HighQ     0.082242    0.140250 2.243262 0.586394    761
+
+=== Long-Short Strategies ===
+Low HP: High Q - Low Q = 0.0042 (t=0.27)
+High HP: High Q - Low Q = 0.0540 (t=1.07)
+
+======================================================================
+TABLE REPLICATION COMPLETED
+======================================================================
+End time: 2025-12-07 15:01:54
+
+All tables saved to output/tables/
+
+Tables generated:
+  ✓ Table I: Summary Statistics
+  ✓ Table II: Weekly Position Changes and Returns
+  ✓ Table III: Return Predictability
+  ⚠ Table IV: DCOT Data Analysis (skipped)
+  ✓ Table V: Portfolio Sorts
+  ✓ Table VI: Smoothed Hedging Pressure
+  ⚠ Table VII: Hedging Pressure DCOT (skipped)
+  ✓ Table VIII: Double-Sorted Portfolios

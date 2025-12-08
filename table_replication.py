@@ -83,37 +83,103 @@ def calculate_additional_variables(df):
         df.loc[mask, 'Ret_Lead2'] = df.loc[mask, 'Ret'].shift(-2)
     print("✓ Calculated lagged returns")
     
-    # Historical volatility (52-week rolling)
+    # Helper function for linear regression
+    def simple_linear_regression(X, y):
+        """Simple linear regression: y = alpha + beta * X + residuals"""
+        X_mean = np.mean(X)
+        y_mean = np.mean(y)
+        beta = np.sum((X - X_mean) * (y - y_mean)) / np.sum((X - X_mean)**2)
+        alpha = y_mean - beta * X_mean
+        y_pred = alpha + beta * X
+        residuals = y - y_pred
+        return alpha, beta, residuals
+    
+    # Load S&P 500 returns first (needed for v_t calculation)
+    spx_ret_series = None
+    try:
+        import yfinance as yf
+        print("\nDownloading S&P 500 data for v_t calculation...")
+        spx = yf.download('^GSPC', start='2000-01-01', end='2018-12-31', progress=False)
+        if not spx.empty:
+            spx_weekly = spx['Close'].resample('W-TUE').last()
+            spx_ret = spx_weekly.pct_change()
+            spx_ret_series = spx_ret
+            print("✓ S&P 500 returns downloaded")
+        else:
+            print("⚠ S&P 500 data empty")
+    except Exception as e:
+        print(f"⚠ Could not download SPX data: {str(e)[:50]}")
+    
+    # Calculate v_t: annualized std of residuals from regression on S&P 500
+    # Paper definition: "annualized standard deviation of the residuals from a 
+    # regression of commodity futures returns on S&P500 returns (52-week rolling window)"
+    print("\nCalculating v_t (idiosyncratic volatility)...")
+    
     for ticker in df['Ticker'].unique():
         mask = df['Ticker'] == ticker
-        df.loc[mask, 'HistVol'] = df.loc[mask, 'Ret'].rolling(52, min_periods=26).std()
-    print("✓ Calculated historical volatility")
+        ticker_data = df.loc[mask].copy()
+        
+        if spx_ret_series is not None:
+            # Merge S&P 500 returns with commodity returns
+            ticker_data = ticker_data.set_index('Report_Date')
+            ticker_data['SPX_Ret'] = spx_ret_series
+            ticker_data = ticker_data.reset_index()
+            
+            # Filter rows with valid returns
+            valid_mask = ticker_data['Ret'].notna() & ticker_data['SPX_Ret'].notna()
+            
+            # Calculate rolling regression residuals
+            v_t_values = []
+            
+            for i in range(len(ticker_data)):
+                if not valid_mask.iloc[i]:
+                    v_t_values.append(np.nan)
+                elif i < 25:  # Need at least 26 weeks
+                    v_t_values.append(np.nan)
+                else:
+                    # Get 52-week window (or available data)
+                    window_start = max(0, i - 51)
+                    window_data = ticker_data.iloc[window_start:i+1]
+                    window_data = window_data[window_data['Ret'].notna() & window_data['SPX_Ret'].notna()]
+                    
+                    if len(window_data) >= 26:  # Minimum 26 weeks
+                        # Run regression: Ret_commodity = alpha + beta * Ret_SPX + residual
+                        X = window_data['SPX_Ret'].values
+                        y = window_data['Ret'].values
+                        
+                        alpha, beta, residuals = simple_linear_regression(X, y)
+                        
+                        # Annualized standard deviation of residuals
+                        # Weekly std * sqrt(52) to annualize
+                        v_t = np.std(residuals, ddof=1) * np.sqrt(52)
+                        v_t_values.append(v_t)
+                    else:
+                        v_t_values.append(np.nan)
+            
+            ticker_data['v_t'] = v_t_values
+            
+            # Merge back to main dataframe by index
+            df.loc[mask, 'v_t'] = ticker_data['v_t'].values
+            df.loc[mask, 'SPX_Ret'] = ticker_data['SPX_Ret'].values
+        else:
+            # Fallback: use simple historical volatility if S&P 500 not available
+            print(f"  ⚠ {ticker}: Using simple volatility (S&P 500 not available)")
+            df.loc[mask, 'v_t'] = df.loc[mask, 'Ret'].rolling(52, min_periods=26).std() * np.sqrt(52)
+    
+    print("✓ Calculated v_t (idiosyncratic volatility)")
     
     # Calculate Basis and S*v_t for Table III
     for ticker in df['Ticker'].unique():
         mask = df['Ticker'] == ticker
         # Basis: simplified as return autocorrelation proxy (since we don't have multiple contract maturities)
-        df.loc[mask, 'Basis'] = df.loc[mask, 'Ret'].rolling(4, min_periods=2).mean()
+        basis_raw = df.loc[mask, 'Ret'].rolling(4, min_periods=2).mean()
+        # Apply log transformation to basis (handling negative values)
+        df.loc[mask, 'Basis'] = np.log(basis_raw + 1)
         # S: sign variable for noncommercial net position
         df.loc[mask, 'S'] = np.where(df.loc[mask, 'NetLong_NonComm'] > 0, 1, -1)
-        # v_t: volatility estimate (use historical volatility)
-        df.loc[mask, 'v_t'] = df.loc[mask, 'HistVol']
+        # S*v: signed idiosyncratic volatility
         df.loc[mask, 'S_v'] = df.loc[mask, 'S'] * df.loc[mask, 'v_t']
     print("✓ Calculated Basis and S*v_t")
-    
-    # Commodity-specific return (remove market effect)
-    # Load S&P 500 for market returns
-    if os.path.exists('data/SPX_data.csv'):
-        try:
-            spx = pd.read_csv('data/SPX_data.csv', index_col=0, parse_dates=True)
-            spx_weekly = spx['Close'].resample('W-TUE').last()
-            spx_ret = spx_weekly.pct_change()
-            
-            # Merge with commodity data
-            df['SPX_Ret'] = df['Report_Date'].map(spx_ret.to_dict())
-            print("✓ Added S&P 500 returns")
-        except Exception as e:
-            print(f"⚠ Could not load SPX data: {str(e)[:50]}")
     
     # Load VIX
     if os.path.exists('data/VIX_data.csv'):
@@ -337,7 +403,7 @@ def table_III_return_predictability(df):
     print(res1a.to_string(index=False))
     results['R_t1_Q_Comm'] = res1a
     
-    # Model 2: Commercial Q with controls (Equation 5)
+    # Model 2: Commercial Q with controls (Equation 5, with Basis)
     print("\nModel 1b: R_{t+1} ~ Q_Comm + Basis + S*v + Ret")
     res1b = fama_macbeth_regression(df, 'Ret_Lead', ['Q_Comm', 'Basis', 'S_v', 'Ret'])
     print(res1b.to_string(index=False))
@@ -349,7 +415,7 @@ def table_III_return_predictability(df):
     print(res2a.to_string(index=False))
     results['R_t1_Q_NonComm'] = res2a
     
-    # Model 4: NonCommercial Q with controls (Equation 5)
+    # Model 4: NonCommercial Q with controls (Equation 5, with Basis)
     print("\nModel 2b: R_{t+1} ~ Q_NonComm + Basis + S*v + Ret")
     res2b = fama_macbeth_regression(df, 'Ret_Lead', ['Q_NonComm', 'Basis', 'S_v', 'Ret'])
     print(res2b.to_string(index=False))
@@ -358,13 +424,13 @@ def table_III_return_predictability(df):
     # For j=2 (two weeks ahead)
     print("\n=== PREDICTIONS FOR R_{t+2} ===")
     
-    # Model 5: Commercial Q with controls for R_{t+2}
+    # Model 5: Commercial Q with controls for R_{t+2} (with Basis)
     print("\nModel 3: R_{t+2} ~ Q_Comm + Basis + S*v + Ret")
     res3 = fama_macbeth_regression(df, 'Ret_Lead2', ['Q_Comm', 'Basis', 'S_v', 'Ret'])
     print(res3.to_string(index=False))
     results['R_t2_Q_Comm_Full'] = res3
     
-    # Model 6: NonCommercial Q with controls for R_{t+2}
+    # Model 6: NonCommercial Q with controls for R_{t+2} (with Basis)
     print("\nModel 4: R_{t+2} ~ Q_NonComm + Basis + S*v + Ret")
     res4 = fama_macbeth_regression(df, 'Ret_Lead2', ['Q_NonComm', 'Basis', 'S_v', 'Ret'])
     print(res4.to_string(index=False))
@@ -497,19 +563,19 @@ def table_VI_smoothed_hp(df):
     # For j=1 (one week ahead)
     print("\n=== PREDICTIONS FOR R_{t+1} ===")
     
-    # Regression 1: HP (not smoothed)
+    # Regression 1: HP (not smoothed, with Basis)
     print("\nRegression 1a: R_{t+1} ~ HP + Basis + S*v + Ret")
     res1a = fama_macbeth_regression(df, 'Ret_Lead', ['HP', 'Basis', 'S_v', 'Ret'])
     print(res1a.to_string(index=False))
     results['R_t1_HP'] = res1a
     
-    # Regression 2: HP_Smooth
+    # Regression 2: HP_Smooth (with Basis)
     print("\nRegression 2a: R_{t+1} ~ HP_Smooth + Basis + S*v + Ret")
     res2a = fama_macbeth_regression(df, 'Ret_Lead', ['HP_Smooth_52w', 'Basis', 'S_v', 'Ret'])
     print(res2a.to_string(index=False))
     results['R_t1_HP_Smooth'] = res2a
     
-    # Regression 3: HP_Smooth + Q
+    # Regression 3: HP_Smooth + Q (with Basis)
     print("\nRegression 3a: R_{t+1} ~ HP_Smooth + Q_Comm + Basis + S*v + Ret")
     res3a = fama_macbeth_regression(df, 'Ret_Lead', ['HP_Smooth_52w', 'Q_Comm', 'Basis', 'S_v', 'Ret'])
     print(res3a.to_string(index=False))
@@ -518,19 +584,19 @@ def table_VI_smoothed_hp(df):
     # For j=2 (two weeks ahead)
     print("\n=== PREDICTIONS FOR R_{t+2} ===")
     
-    # Regression 1: HP (not smoothed)
+    # Regression 1: HP (not smoothed, with Basis)
     print("\nRegression 1b: R_{t+2} ~ HP + Basis + S*v + Ret")
     res1b = fama_macbeth_regression(df, 'Ret_Lead2', ['HP', 'Basis', 'S_v', 'Ret'])
     print(res1b.to_string(index=False))
     results['R_t2_HP'] = res1b
     
-    # Regression 2: HP_Smooth
+    # Regression 2: HP_Smooth (with Basis)
     print("\nRegression 2b: R_{t+2} ~ HP_Smooth + Basis + S*v + Ret")
     res2b = fama_macbeth_regression(df, 'Ret_Lead2', ['HP_Smooth_52w', 'Basis', 'S_v', 'Ret'])
     print(res2b.to_string(index=False))
     results['R_t2_HP_Smooth'] = res2b
     
-    # Regression 3: HP_Smooth + Q
+    # Regression 3: HP_Smooth + Q (with Basis)
     print("\nRegression 3b: R_{t+2} ~ HP_Smooth + Q_Comm + Basis + S*v + Ret")
     res3b = fama_macbeth_regression(df, 'Ret_Lead2', ['HP_Smooth_52w', 'Q_Comm', 'Basis', 'S_v', 'Ret'])
     print(res3b.to_string(index=False))
