@@ -1,200 +1,143 @@
-# A Tale of Two Premiums - Python Replication
+# A Tale of Two Premiums - 复现项目
 
-This project replicates the data acquisition and preprocessing pipeline for the paper **"A Tale of Two Premiums: The Role of Hedgers and Speculators in Commodity Futures Markets"**.
+论文 **"A Tale of Two Premiums: The Role of Hedgers and Speculators in Commodity Futures Markets"** 的 Python 复现。
 
-## Project Status
+原文链接：
+- [Wiley](https://onlinelibrary.wiley.com/doi/abs/10.1111/jofi.12845)
+- [SSRN](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2449315)
 
-✅ **Phase 1: Data Acquisition and Preprocessing - COMPLETED**
+参考笔记：
+- https://xseeope.github.io/#/papers/Futures/two_premium
+## 项目简介
 
-## Project Structure
+本项目复现了论文中关于套期保值压力、交易者持仓与商品期货收益率之间关系的实证分析，涵盖 22 个主要商品市场。
 
-```
-two_tale_1.0/
-├── data/
-│   ├── cftc_legacy/           # CFTC Legacy COT reports (2003-2017)
-│   ├── cftc_disagg/           # CFTC Disaggregated COT reports (2010-2017)
-│   ├── prices/                # Daily commodity futures prices (22 commodities)
-│   ├── processed/             # Weekly aligned data with calculated variables (22 files)
-│   ├── VIX_data.csv          # VIX volatility index
-│   └── SPX_data.csv          # S&P 500 index
-├── data_acquisition.py        # Download CFTC and price data
-├── data_preprocessing.py      # Align time series and calculate variables
-├── data_summary.py            # Generate data summary report
-├── prompt_1.md               # Original task specification
-└── README.md                 # This file
-```
+## 快速开始
 
-## Data Summary
-
-### 1. CFTC Legacy COT Data
-- **Records**: 114,189
-- **Date Range**: 2003-01-07 to 2017-12-26
-- **Commodities**: 908 unique market names
-- **Source**: https://www.cftc.gov/MarketReports/CommitmentsofTraders/index.htm
-
-### 2. CFTC Disaggregated COT Data
-- **Records**: 65,998
-- **Date Range**: 2010-01-05 to 2012-12-31
-- **Commodities**: 210 unique markets
-- **Source**: CFTC Disaggregated Futures Only Reports
-
-### 3. Commodity Futures Prices
-- **Commodities**: 22 major futures contracts
-- **Source**: Yahoo Finance (yfinance)
-- **Frequency**: Daily prices, resampled to weekly (Tuesday close)
-
-| Category | Tickers |
-|----------|---------|
-| Energy | CL (Crude Oil), HO (Heating Oil), NG (Natural Gas), RB (RBOB Gasoline) |
-| Metals | GC (Gold), SI (Silver), HG (Copper), PL (Platinum), PA (Palladium) |
-| Grains | ZW (Wheat), ZC (Corn), ZS (Soybean), ZL (Soybean Oil), ZM (Soybean Meal) |
-| Softs | KC (Coffee), SB (Sugar), CC (Cocoa), CT (Cotton), OJ (Orange Juice) |
-| Livestock | LE (Live Cattle), HE (Lean Hogs), GF (Feeder Cattle) |
-
-### 4. Processed Data
-- **Files**: 22 processed CSV files (one per commodity)
-- **Observations**: 770-2,762 weekly observations per commodity
-- **Date Range**: 2003-01-07 to 2017-12-26
-- **All variables**: 7/7 calculated for each commodity
-
-## Calculated Variables
-
-According to the paper's equations (1)-(4):
-
-### 1. Hedging Pressure (HP)
-```
-HP = (Commercial_Short - Commercial_Long) / Open_Interest
-```
-Measures the net short position of hedgers (commercial traders) relative to total open interest.
-
-### 2. Net Trading (Q)
-```
-Q_Comm = Δ(NetLong_Commercial) / OI_{t-1}
-Q_NonComm = Δ(NetLong_NonCommercial) / OI_{t-1}
-```
-Measures the change in net long positions, scaled by previous week's open interest.
-
-### 3. Propensity to Trade (PT)
-```
-PT = (|ΔLong| + |ΔShort|) / (Long + Short)
-```
-Measures trading activity relative to total positions held.
-
-### 4. Excess Return (R)
-```
-Ret = (F_t - F_{t-1}) / F_{t-1}
-Ret_Lead = Ret_{t+1}  (for prediction)
-```
-Weekly percentage return, with lead return for forecasting models.
-
-### 5. Smoothed Hedging Pressure
-```
-HP_Smooth_52w = 52-week rolling average of HP
-```
-Smoothed version of HP to reduce noise.
-
-## Key Data Alignment
-
-Critical time alignment following the paper's methodology:
-- **COT Reports**: Published on Friday, show positions as of **Tuesday close**
-- **Price Data**: Resampled to **weekly Tuesday close** to match COT timing
-- **Returns**: Calculated as week-over-week changes
-- **Lead Returns**: Shifted by -1 week for predictive modeling
-
-## Installation and Usage
-
-### 1. Environment Setup
 ```bash
-# Create conda environment
-conda create -n two_tale python=3.9 -y
-conda activate two_tale
+# 安装依赖
+pip install pandas numpy yfinance requests statsmodels scipy
 
-# Install dependencies
-pip install pandas requests yfinance beautifulsoup4 openpyxl lxml
-```
-
-### 2. Data Acquisition
-```bash
+# 下载数据
 python data_acquisition.py
-```
-Downloads:
-- CFTC Legacy COT data (2003-2017)
-- CFTC Disaggregated COT data (2010-2017)
-- 22 commodity futures prices (1994-2017)
-- Macro data (VIX, S&P 500)
 
-### 3. Data Preprocessing
-```bash
+# 数据预处理
 python data_preprocessing.py
+
+# 运行回归分析
+python table_replication.py
 ```
-Processes:
-- Time alignment (weekly Tuesday)
-- Variable calculation (HP, Q, PT, Returns)
-- Data merging (COT + Prices)
-- Output: 22 processed CSV files
 
-### 4. View Summary
-```bash
-python data_summary.py
+## 项目结构
+
 ```
-Displays comprehensive data summary with statistics.
+├── data/
+│   ├── cftc_legacy/        # CFTC 持仓报告
+│   ├── prices/             # 商品期货价格数据（Yahoo Finance）
+│   └── processed/          # 合并后的周频数据
+├── output/
+│   └── tables/             # 回归结果
+├── data_acquisition.py     # 下载 CFTC 持仓数据和价格数据
+├── data_preprocessing.py   # 计算变量并对齐时间序列
+└── table_replication.py    # Fama-MacBeth 回归分析
+```
 
-## Data Files
+## 数据来源
 
-### Processed Data Columns
-Each file in `data/processed/` contains:
-- `Report_Date`: COT report date (Tuesday)
-- `Open_Interest_All`: Total open interest
-- `Comm_Positions_Long_All`: Commercial long positions
-- `Comm_Positions_Short_All`: Commercial short positions
-- `NonComm_Positions_Long_All`: Non-commercial long positions
-- `NonComm_Positions_Short_All`: Non-commercial short positions
-- `{TICKER}_Close`: Weekly closing price
-- `HP`: Hedging pressure
-- `Q_Comm`, `Q_NonComm`: Net trading
-- `PT_Comm`, `PT_NonComm`: Propensity to trade
-- `Ret`, `Ret_Lead`: Returns
-- `HP_Smooth_52w`: Smoothed HP
+**CFTC 持仓数据** (1994-2017)
+- 每周 Commitment of Traders (COT) 报告
+- 商业交易者 vs. 非商业交易者持仓
+- 数据源：https://www.cftc.gov/MarketReports/CommitmentsofTraders/
 
-## Data Quality Notes
+**商品价格数据** (1994-2017)
+- 22 个商品期货合约，涵盖能源、金属、谷物、软商品、畜牧
+- 日频价格转换为周频（周二收盘价）
+- 数据源：Yahoo Finance
 
-### Completeness
-- ✅ All 22 commodities have complete data
-- ✅ All 7 variables calculated successfully
-- ✅ Date ranges cover the paper's study period
+**涵盖商品**
 
-### Limitations
-- Legacy COT data starts from 2003 (earlier years had URL access issues)
-- Some small commodities may have limited early data
-- Yahoo Finance continuous contracts may differ slightly from paper's Pinnacle data
-- Disaggregated data only available from 2006 onwards per CFTC
+| 类别   | 代码 |
+|--------|------|
+| 能源   | CL, HO, NG, RB |
+| 金属   | GC, SI, HG, PL, PA |
+| 谷物   | ZW, ZC, ZS, ZL, ZM, ZO, KE |
+| 软商品 | KC, SB, CC, CT, OJ |
+| 畜牧   | LE, HE, GF |
 
-### Data Integrity
-- ✅ No fake/fabricated data - all downloaded from official sources
-- ✅ CFTC data: Official CFTC website
-- ✅ Price data: Yahoo Finance API (real market data)
-- ✅ All variables calculated per paper formulas
+## 核心变量
 
-## Next Steps
+遵循论文方法构造的变量：
 
-The next phase would involve:
-1. **Descriptive Statistics**: Calculate summary statistics for Table 1
-2. **Regression Analysis**: Implement equations (5)-(7) from the paper
-3. **Panel Regression**: Fama-MacBeth and pooled OLS
-4. **Visualization**: Time series plots and correlation analysis
-5. **Robustness Tests**: Different time periods and commodity subsets
+**套期保值压力 (HP)**
+```
+HP = (商业交易者空头 - 商业交易者多头) / 未平仓合约数
+```
 
-## References
+**净交易量 (Q)**
+```
+Q = Δ(净多头持仓) / OI_{t-1} × 100
+```
+净持仓变化的百分比（商业 vs. 非商业交易者）
 
-- CFTC Commitments of Traders Reports: https://www.cftc.gov/MarketReports/CommitmentsofTraders/
-- Yahoo Finance API: https://github.com/ranaroussi/yfinance
-- Original Paper: "A Tale of Two Premiums: The Role of Hedgers and Speculators in Commodity Futures Markets"
+**交易倾向 (PT)**
+```
+PT = (|Δ多头| + |Δ空头|) / (多头 + 空头)
+```
 
-## License
+**特质波动率 (v_t)**
+```
+v_t = annualized std(商品收益率对 S&P 500 回归的残差)
+```
+52 周滚动窗口计算
 
-This is an academic replication project for research and educational purposes.
+**超额收益率**
+```
+Ret_{t+1} = (F_{t+1} - F_t) / F_t
+```
 
-## Author
+## 回归分析
 
-Created: 2025-12-02
-Environment: Python 3.9, Conda
+本项目实现了 Fama-MacBeth 横截面回归：
+
+**Table I**：收益率、套期保值压力和交易活动的描述性统计
+
+**Table II**：持仓变化与收益率
+- 商业交易者对价格变化的响应
+- 非商业交易者的动量交易行为
+
+**Table III**：收益率可预测性
+- 套期保值压力溢价
+- 净交易量效应
+- 特质波动率交互作用
+
+**Table IV**：风险溢价分解
+- 套期保值溢价 vs. 投机溢价
+- 控制变量稳健性检验
+
+## 输出结果
+
+结果保存在 `output/tables/` 目录：
+- `table_I_summary_statistics.csv`
+- `table_II_position_changes_returns.csv`
+- `table_III_return_predictability.csv`
+- `table_IV_premium_decomposition.csv`
+
+每个文件包含回归系数、t 统计量和 p 值。
+
+## 注意事项
+
+- **时间对齐**：COT 报告（周二收盘）与周频价格数据匹配
+- **连续合约**：使用 Yahoo Finance 连续合约作为主力合约的代理
+<!-- - **数据期间**：1994-2017（与原始论文一致） -->
+- **基差数据缺失**：真实基差（近月-远月价差）无法从免费数据源获取，使用简化代理
+
+## 局限性
+
+- Yahoo Finance 提供连续合约，非特定到期月份合约
+- 真实基差计算需要期货曲线数据（免费数据源无法获取）
+- 部分商品早期数据有限
+- CFTC 细分数据（disaggregated data）仅从 2006 年开始提供
+
+---
+
+**说明**：本项目为使用公开数据的独立复现。由于数据源差异，结果可能与原始论文存在偏差。
