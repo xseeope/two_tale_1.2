@@ -233,19 +233,22 @@ def calculate_variables(df):
         print("✓ Calculated Hedging Pressure (HP)")
     
     # Equation (2): Net Trading (Q)
-    # Q = (NetLong_t - NetLong_{t-1}) / OI_{t-1}
+    # Q = (NetLong_t - NetLong_{t-1}) / OI_{t-1} * 100  (in percentage)
+    # NOTE: Do NOT use absolute value - Q can be positive or negative
+    # Positive Q = increasing net long position
+    # Negative Q = decreasing net long position
     
     # For Commercial (Hedgers)
     if 'Comm_Positions_Long_All' in df.columns and 'Comm_Positions_Short_All' in df.columns:
         df['NetLong_Comm'] = df['Comm_Positions_Long_All'] - df['Comm_Positions_Short_All']
-        df['Q_Comm'] = df['NetLong_Comm'].diff() / df['Open_Interest_All'].shift(1)
-        print("✓ Calculated Net Trading for Commercial (Q_Comm)")
+        df['Q_Comm'] = df['NetLong_Comm'].diff() / df['Open_Interest_All'].shift(1) * 100
+        print("✓ Calculated Net Trading for Commercial (Q_Comm) in percentage (without abs)")
     
     # For Non-Commercial (Speculators)
     if 'NonComm_Positions_Long_All' in df.columns and 'NonComm_Positions_Short_All' in df.columns:
         df['NetLong_NonComm'] = df['NonComm_Positions_Long_All'] - df['NonComm_Positions_Short_All']
-        df['Q_NonComm'] = df['NetLong_NonComm'].diff() / df['Open_Interest_All'].shift(1)
-        print("✓ Calculated Net Trading for Non-Commercial (Q_NonComm)")
+        df['Q_NonComm'] = df['NetLong_NonComm'].diff() / df['Open_Interest_All'].shift(1) * 100
+        print("✓ Calculated Net Trading for Non-Commercial (Q_NonComm) in percentage (without abs)")
     
     # Equation (3): Propensity to Trade (PT)
     # PT = (|ΔLong| + |ΔShort|) / (Long + Short)
@@ -289,7 +292,7 @@ def merge_cot_and_prices(cot_df, price_dict, commodity_map):
     -----------
     cot_df : DataFrame with COT data
     price_dict : dict of {ticker: price_df}
-    commodity_map : dict mapping CFTC market codes/names to tickers
+    commodity_map : tuple of (name_map, code_map)
     
     Returns:
     --------
@@ -299,13 +302,21 @@ def merge_cot_and_prices(cot_df, price_dict, commodity_map):
     print("Merging COT and Price Data...")
     print("=" * 60)
     
+    name_map, code_map = commodity_map
     merged_dict = {}
     
     for ticker, price_df in price_dict.items():
-        # Try to find matching commodity in COT data
-        # This requires manual mapping between CFTC codes and tickers
-        cot_subset = cot_df[cot_df['Market_and_Exchange_Names'].str.contains(
-            commodity_map.get(ticker, ticker), case=False, na=False)]
+        # Try code-based matching first (more precise)
+        if ticker in code_map:
+            cftc_code = code_map[ticker]
+            cot_subset = cot_df[cot_df['CFTC_Contract_Market_Code'] == cftc_code]
+            match_method = f"CFTC Code {cftc_code}"
+        else:
+            # Fall back to name-based matching
+            commodity_name = name_map.get(ticker, ticker)
+            cot_subset = cot_df[cot_df['Market_and_Exchange_Names'].str.contains(
+                commodity_name, case=False, na=False)]
+            match_method = f"Name '{commodity_name}'"
         
         if not cot_subset.empty:
             # Set Report_Date as index
@@ -318,20 +329,21 @@ def merge_cot_and_prices(cot_df, price_dict, commodity_map):
                 # Sort by date in ascending order
                 merged = merged.sort_index()
                 merged_dict[ticker] = merged
-                print(f"✓ {ticker:12} - {len(merged)} matched observations")
+                print(f"✓ {ticker:12} - {len(merged):4} obs via {match_method}")
             else:
                 print(f"✗ {ticker:12} - No overlapping dates")
         else:
-            print(f"✗ {ticker:12} - Not found in COT data")
+            print(f"✗ {ticker:12} - Not found in COT data ({match_method})")
     
     return merged_dict
 
 def create_commodity_map():
     """
-    Create mapping between Yahoo Finance tickers and CFTC market names
-    This is a simplified mapping - may need adjustments based on actual data
+    Create mapping between Yahoo Finance tickers and CFTC identifiers
+    Returns two mappings: one for names (general) and one for CFTC codes (specific)
     """
-    return {
+    # Name-based mapping (for most commodities)
+    name_map = {
         'CL': 'CRUDE OIL',
         'HO': 'HEATING OIL',
         'NG': 'NATURAL GAS',
@@ -341,9 +353,6 @@ def create_commodity_map():
         'HG': 'COPPER',
         'PL': 'PLATINUM',
         'PA': 'PALLADIUM',
-        'ZW': 'WHEAT',
-        'KE': 'WHEAT',
-        'MW': 'WHEAT',
         'ZC': 'CORN',
         'ZO': 'OATS',
         'ZS': 'SOYBEANS',
@@ -360,6 +369,50 @@ def create_commodity_map():
         'HE': 'LEAN HOGS',
         'GF': 'FEEDER CATTLE'
     }
+    
+    # CFTC Code-based mapping for all commodities
+    # Using explicit codes ensures accurate matching and avoids ambiguity
+    code_map = {
+        # Energy
+        'CL': '067651',  # Crude Oil WTI - NYMEX (not ICE Europe)
+        'HO': '022651',  # Heating Oil - NYMEX (main contract, not swaps)
+        'NG': '023651',  # Natural Gas - NYMEX (not ICE)
+        'RB': '111659',  # RBOB Gasoline - NYMEX (not unleaded)
+        
+        # Precious Metals
+        'GC': '088691',  # Gold - COMEX (not CBOT)
+        'SI': '084691',  # Silver - COMEX (not CBOT)
+        'PL': '076651',  # Platinum - NYMEX
+        'PA': '075651',  # Palladium - NYMEX
+        
+        # Base Metals
+        'HG': '085692',  # Copper - COMEX
+        
+        # Grains
+        'ZW': '001602',  # Wheat SRW - CBOT Chicago
+        'KE': '001612',  # Wheat HRW - KCBT Kansas City
+        'MW': '001626',  # Wheat HRS - MGEX Minneapolis
+        'ZC': '002602',  # Corn - CBOT
+        'ZO': '004603',  # Oats - CBOT
+        'ZS': '005602',  # Soybeans - CBOT
+        'ZL': '007601',  # Soybean Oil - CBOT
+        'ZM': '026603',  # Soybean Meal - CBOT
+        
+        # Softs
+        'KC': '083731',  # Coffee - ICE (formerly CSCE)
+        'SB': '080732',  # Sugar #11 - ICE (not #14)
+        'CC': '073732',  # Cocoa - ICE
+        'CT': '033661',  # Cotton #2 - ICE
+        'OJ': '040701',  # Orange Juice - ICE
+        
+        # Livestock
+        'LB': '058643',  # Lumber - CME
+        'LE': '057642',  # Live Cattle - CME
+        'HE': '054642',  # Lean Hogs - CME
+        'GF': '061641',  # Feeder Cattle - CME
+    }
+    
+    return name_map, code_map
 
 if __name__ == "__main__":
     print("\n" + "=" * 60)
