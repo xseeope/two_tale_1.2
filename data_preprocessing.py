@@ -377,7 +377,6 @@ def create_commodity_map():
         'CL': '067651',  # Crude Oil WTI - NYMEX (not ICE Europe)
         'HO': '022651',  # Heating Oil - NYMEX (main contract, not swaps)
         'NG': '023651',  # Natural Gas - NYMEX (not ICE)
-        'RB': '111659',  # RBOB Gasoline - NYMEX (not unleaded)
         
         # Precious Metals
         'GC': '088691',  # Gold - COMEX (not CBOT)
@@ -388,15 +387,15 @@ def create_commodity_map():
         # Base Metals
         'HG': '085692',  # Copper - COMEX
         
-        # Grains
+        # Grains 缺少 Minn Wheat
         'ZW': '001602',  # Wheat SRW - CBOT Chicago
         'KE': '001612',  # Wheat HRW - KCBT Kansas City
-        'MW': '001626',  # Wheat HRS - MGEX Minneapolis
         'ZC': '002602',  # Corn - CBOT
         'ZO': '004603',  # Oats - CBOT
         'ZS': '005602',  # Soybeans - CBOT
         'ZL': '007601',  # Soybean Oil - CBOT
         'ZM': '026603',  # Soybean Meal - CBOT
+        'RR': '039601',  # Rough Rice - CBOT
         
         # Softs
         'KC': '083731',  # Coffee - ICE (formerly CSCE)

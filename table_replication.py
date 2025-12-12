@@ -446,21 +446,80 @@ def table_III_return_predictability(df):
     return results
 
 # ============================================================================
+# Helper function to load daily prices
+# ============================================================================
+def load_daily_prices():
+    """Load all daily price data for calculating daily returns"""
+    print("\nLoading daily price data...")
+    all_daily_data = {}
+    
+    files = glob.glob('data/prices/*_prices.csv')
+    for file in files:
+        ticker = os.path.basename(file).replace('_prices.csv', '')
+        try:
+            df_price = pd.read_csv(file)
+            # Skip header rows with ticker symbols
+            df_price = df_price[df_price['Date'].notna() & (df_price['Date'] != '')]
+            df_price['Date'] = pd.to_datetime(df_price['Date'])
+            df_price = df_price.sort_values('Date')
+            df_price['Close'] = pd.to_numeric(df_price['Close'], errors='coerce')
+            df_price = df_price[df_price['Close'].notna()]
+            all_daily_data[ticker] = df_price[['Date', 'Close']].set_index('Date')
+        except Exception as e:
+            print(f"  ⚠ Could not load {ticker}: {str(e)[:50]}")
+    
+    print(f"✓ Loaded daily prices for {len(all_daily_data)} commodities")
+    return all_daily_data
+
+def calculate_cumulative_returns(daily_prices, ticker, start_date, end_date):
+    """Calculate cumulative return from start_date to end_date for a ticker"""
+    if ticker not in daily_prices:
+        return np.nan
+    
+    price_data = daily_prices[ticker]
+    
+    # Get prices within date range
+    mask = (price_data.index >= start_date) & (price_data.index <= end_date)
+    prices = price_data.loc[mask, 'Close']
+    
+    if len(prices) < 2:
+        return np.nan
+    
+    # Cumulative return: (end_price - start_price) / start_price
+    cum_ret = (prices.iloc[-1] - prices.iloc[0]) / prices.iloc[0]
+    return cum_ret
+
+# ============================================================================
 # TABLE V: Portfolio Sorts
 # ============================================================================
 def table_V_portfolio_sorts(df):
-    """Generate Table V: Portfolio Sorts based on Q_Comm"""
+    """Generate Table V: Portfolio Sorts based on Q_Comm
+    Calculate returns over day ranges: [-10,0], [1,4], [5,10], [11,20], [21,40], [1,40]
+    """
     print("\n" + "=" * 70)
-    print("TABLE V: PORTFOLIO SORTS")
+    print("TABLE V: PORTFOLIO SORTS (DAILY RETURNS)")
     print("=" * 70)
+    
+    # Load daily price data
+    daily_prices = load_daily_prices()
+    
+    # Define periods as (start_day, end_day) relative to report date
+    periods = [
+        ('-10to0', -10, 0),
+        ('1to4', 1, 4),
+        ('5to10', 5, 10),
+        ('11to20', 11, 20),
+        ('21to40', 21, 40),
+        ('1to40', 1, 40)
+    ]
     
     # Get unique dates
     dates = sorted(df['Report_Date'].unique())
     
-    horizons = [1, 5, 10, 20, 40]  # weeks
-    results_dict = {h: [] for h in horizons}
+    # Store results for each period
+    results_dict = {period[0]: [] for period in periods}
     
-    for date_idx, date in enumerate(dates):
+    for date in dates:
         # Get current cross-section
         current = df[df['Report_Date'] == date].copy()
         
@@ -468,60 +527,70 @@ def table_V_portfolio_sorts(df):
             continue
         
         # Sort into quintiles based on Q_Comm
-        current['Quintile'] = pd.qcut(current['Q_Comm'], q=5, labels=[1, 2, 3, 4, 5], duplicates='drop')
+        try:
+            current['Quintile'] = pd.qcut(current['Q_Comm'], q=5, labels=[1, 2, 3, 4, 5], duplicates='drop')
+        except:
+            continue
         
-        # For each horizon, calculate forward returns
-        for horizon in horizons:
-            if date_idx + horizon >= len(dates):
+        # For each period, calculate returns
+        for period_name, start_day, end_day in periods:
+            # Calculate date range
+            start_date = date + pd.Timedelta(days=start_day)
+            end_date = date + pd.Timedelta(days=end_day)
+            
+            # Calculate returns for each ticker
+            returns_list = []
+            for _, row in current.iterrows():
+                ticker = row['Ticker']
+                quintile = row['Quintile']
+                
+                # Calculate cumulative return over the period
+                cum_ret = calculate_cumulative_returns(daily_prices, ticker, start_date, end_date)
+                
+                if not np.isnan(cum_ret):
+                    returns_list.append({'Quintile': quintile, 'Return': cum_ret})
+            
+            if len(returns_list) < 5:
                 continue
             
-            future_date = dates[date_idx + horizon]
+            # Calculate portfolio returns by quintile
+            returns_df = pd.DataFrame(returns_list)
+            portfolio_rets = returns_df.groupby('Quintile')['Return'].mean()
             
-            # Get returns at future date
-            future_rets = df[df['Report_Date'] == future_date][['Ticker', 'Ret']].copy()
-            
-            # Merge
-            merged = current[['Ticker', 'Quintile']].merge(future_rets, on='Ticker', how='inner')
-            
-            if len(merged) < 5:
-                continue
-            
-            # Calculate portfolio returns
-            portfolio_rets = merged.groupby('Quintile')['Ret'].mean()
-            
-            results_dict[horizon].append(portfolio_rets)
+            results_dict[period_name].append(portfolio_rets)
     
     # Aggregate results
     table_data = []
-    for horizon in horizons:
-        if len(results_dict[horizon]) == 0:
+    for period_name, start_day, end_day in periods:
+        if len(results_dict[period_name]) == 0:
             continue
         
         # Convert to DataFrame
-        all_rets = pd.DataFrame(results_dict[horizon])
+        all_rets = pd.DataFrame(results_dict[period_name])
         
-        # Calculate means and t-stats
-        mean_rets = all_rets.mean() * 52  # Annualize
+        # Calculate means and t-stats (NO annualization)
+        mean_rets = all_rets.mean()
         t_stats = (all_rets.mean() / all_rets.std()) * np.sqrt(len(all_rets))
         
         # Long-Short (Q5 - Q1)
         if 5 in all_rets.columns and 1 in all_rets.columns:
             ls_rets = all_rets[5] - all_rets[1]
-            ls_mean = ls_rets.mean() * 52
+            ls_mean = ls_rets.mean()
             ls_tstat = (ls_rets.mean() / ls_rets.std()) * np.sqrt(len(ls_rets))
         else:
             ls_mean = np.nan
             ls_tstat = np.nan
         
         row = {
-            'Horizon_Weeks': horizon,
+            'Period': period_name,
             'Q1_Return': mean_rets.get(1, np.nan),
             'Q2_Return': mean_rets.get(2, np.nan),
             'Q3_Return': mean_rets.get(3, np.nan),
             'Q4_Return': mean_rets.get(4, np.nan),
             'Q5_Return': mean_rets.get(5, np.nan),
             'LS_Return': ls_mean,
-            'LS_tstat': ls_tstat
+            'LS_tstat': ls_tstat,
+            'N_obs': len(all_rets)
         }
         table_data.append(row)
     
@@ -628,26 +697,41 @@ def table_VII_hp_dcot(df):
 def table_VIII_double_sorts(df):
     """Generate Table VIII: Double-Sorted Portfolios
     Sort by HP_Smooth first (High/Low), then by Q_Comm within each HP group
-    Create 2x2 matrix showing returns for all combinations
+    Calculate returns over multiple periods (days and weeks)
     """
     print("\n" + "=" * 70)
-    print("TABLE VIII: DOUBLE-SORTED PORTFOLIOS")
+    print("TABLE VIII: DOUBLE-SORTED PORTFOLIOS (DAILY RETURNS)")
     print("=" * 70)
+    
+    # Load daily price data
+    daily_prices = load_daily_prices()
+    
+    # Define periods: day ranges and week ranges
+    periods = [
+        ('-10to0', -10, 0, 'days'),
+        ('1to4', 1, 4, 'days'),
+        ('5to10', 5, 10, 'days'),
+        ('11to20', 11, 20, 'days'),
+        ('21to40', 21, 40, 'days'),
+        ('1to40', 1, 40, 'days'),
+        ('week1', 1, 7, 'days'),      # Week 1 = 1-7 days
+        ('week2to4', 8, 28, 'days'),  # Week 2-4 = 8-28 days
+        ('week5to8', 29, 56, 'days'), # Week 5-8 = 29-56 days
+        ('week1to8', 1, 56, 'days')   # Week 1-8 = 1-56 days
+    ]
     
     # Get unique dates
     dates = sorted(df['Report_Date'].unique())
     
+    # Store results for each portfolio and period
     portfolio_returns = {
-        'LowHP_LowQ': [],
-        'LowHP_HighQ': [],
-        'HighHP_LowQ': [],
-        'HighHP_HighQ': []
+        'LowHP_LowQ': {period[0]: [] for period in periods},
+        'LowHP_HighQ': {period[0]: [] for period in periods},
+        'HighHP_LowQ': {period[0]: [] for period in periods},
+        'HighHP_HighQ': {period[0]: [] for period in periods}
     }
     
-    for date_idx, date in enumerate(dates):
-        if date_idx + 1 >= len(dates):
-            continue
-            
+    for date in dates:
         # Get current cross-section
         current = df[df['Report_Date'] == date].copy()
         
@@ -667,55 +751,91 @@ def table_VIII_double_sorts(df):
             current.loc[(current['HP_Group'] == hp_group) & (current['Q_Comm'] <= q_median), 'Portfolio'] = f'{hp_group}HP_LowQ'
             current.loc[(current['HP_Group'] == hp_group) & (current['Q_Comm'] > q_median), 'Portfolio'] = f'{hp_group}HP_HighQ'
         
-        # Get next week's returns
-        future_date = dates[date_idx + 1]
-        future_rets = df[df['Report_Date'] == future_date][['Ticker', 'Ret']].copy()
-        
-        # Merge
-        merged = current[['Ticker', 'Portfolio']].merge(future_rets, on='Ticker', how='inner')
-        
-        # Calculate portfolio returns
-        for portfolio_name in portfolio_returns.keys():
-            portfolio_data = merged[merged['Portfolio'] == portfolio_name]
-            if len(portfolio_data) > 0:
-                portfolio_returns[portfolio_name].append(portfolio_data['Ret'].mean())
-    
-    # Calculate statistics
-    results = []
-    for portfolio_name, returns in portfolio_returns.items():
-        if len(returns) > 0:
-            returns_array = np.array(returns)
-            mean_ret = returns_array.mean() * 52  # Annualize
-            std_ret = returns_array.std() * np.sqrt(52)
-            t_stat = (returns_array.mean() / returns_array.std()) * np.sqrt(len(returns_array))
-            sharpe = mean_ret / std_ret if std_ret > 0 else np.nan
+        # For each period, calculate returns
+        for period_name, start_day, end_day, unit in periods:
+            # Calculate date range
+            start_date = date + pd.Timedelta(days=start_day)
+            end_date = date + pd.Timedelta(days=end_day)
             
-            results.append({
-                'Portfolio': portfolio_name,
-                'Mean_Return': mean_ret,
-                'Std_Return': std_ret,
-                't_stat': t_stat,
-                'Sharpe': sharpe,
-                'N_obs': len(returns)
-            })
+            # Calculate returns for each portfolio
+            for portfolio_name in portfolio_returns.keys():
+                portfolio_tickers = current[current['Portfolio'] == portfolio_name]
+                
+                if len(portfolio_tickers) == 0:
+                    continue
+                
+                # Calculate returns for each ticker in the portfolio
+                portfolio_period_returns = []
+                for _, row in portfolio_tickers.iterrows():
+                    ticker = row['Ticker']
+                    cum_ret = calculate_cumulative_returns(daily_prices, ticker, start_date, end_date)
+                    if not np.isnan(cum_ret):
+                        portfolio_period_returns.append(cum_ret)
+                
+                # Average return for this portfolio in this period
+                if len(portfolio_period_returns) > 0:
+                    portfolio_returns[portfolio_name][period_name].append(np.mean(portfolio_period_returns))
     
-    table = pd.DataFrame(results)
-    table.to_csv('output/tables/table_VIII_double_sorts.csv', index=False)
+    # Calculate statistics for each portfolio and period
+    all_results = []
+    for portfolio_name in portfolio_returns.keys():
+        for period_name, start_day, end_day, unit in periods:
+            returns = portfolio_returns[portfolio_name][period_name]
+            
+            if len(returns) > 0:
+                returns_array = np.array(returns)
+                mean_ret = returns_array.mean()  # NO annualization
+                std_ret = returns_array.std()
+                t_stat = (returns_array.mean() / returns_array.std()) * np.sqrt(len(returns_array))
+                
+                all_results.append({
+                    'Portfolio': portfolio_name,
+                    'Period': period_name,
+                    'Mean_Return': mean_ret,
+                    'Std_Return': std_ret,
+                    't_stat': t_stat,
+                    'N_obs': len(returns)
+                })
+    
+    table = pd.DataFrame(all_results)
+    
+    # Pivot table for better readability
+    pivot_mean = table.pivot(index='Period', columns='Portfolio', values='Mean_Return')
+    pivot_tstat = table.pivot(index='Period', columns='Portfolio', values='t_stat')
+    
+    # Save both versions
+    table.to_csv('output/tables/table_VIII_double_sorts_detailed.csv', index=False)
+    pivot_mean.to_csv('output/tables/table_VIII_double_sorts_mean_returns.csv')
+    pivot_tstat.to_csv('output/tables/table_VIII_double_sorts_tstat.csv')
     
     print("\n✓ Table VIII saved")
-    print(table.to_string(index=False))
+    print("\nMean Returns:")
+    print(pivot_mean.to_string())
+    print("\nt-statistics:")
+    print(pivot_tstat.to_string())
     
     # Calculate Long-Short strategies
-    print("\n=== Long-Short Strategies ===")
-    if len(portfolio_returns['LowHP_HighQ']) > 0 and len(portfolio_returns['LowHP_LowQ']) > 0:
-        min_len = min(len(portfolio_returns['LowHP_HighQ']), len(portfolio_returns['LowHP_LowQ']))
-        ls_low_hp = np.array(portfolio_returns['LowHP_HighQ'][:min_len]) - np.array(portfolio_returns['LowHP_LowQ'][:min_len])
-        print(f"Low HP: High Q - Low Q = {ls_low_hp.mean()*52:.4f} (t={ls_low_hp.mean()/(ls_low_hp.std()/np.sqrt(len(ls_low_hp))):.2f})")
-    
-    if len(portfolio_returns['HighHP_HighQ']) > 0 and len(portfolio_returns['HighHP_LowQ']) > 0:
-        min_len = min(len(portfolio_returns['HighHP_HighQ']), len(portfolio_returns['HighHP_LowQ']))
-        ls_high_hp = np.array(portfolio_returns['HighHP_HighQ'][:min_len]) - np.array(portfolio_returns['HighHP_LowQ'][:min_len])
-        print(f"High HP: High Q - Low Q = {ls_high_hp.mean()*52:.4f} (t={ls_high_hp.mean()/(ls_high_hp.std()/np.sqrt(len(ls_high_hp))):.2f})")
+    print("\n=== Long-Short Strategies (HighQ - LowQ) ===")
+    for period_name, start_day, end_day, unit in periods:
+        # Low HP: HighQ - LowQ
+        if len(portfolio_returns['LowHP_HighQ'][period_name]) > 0 and len(portfolio_returns['LowHP_LowQ'][period_name]) > 0:
+            min_len = min(len(portfolio_returns['LowHP_HighQ'][period_name]), len(portfolio_returns['LowHP_LowQ'][period_name]))
+            ls_low_hp = np.array(portfolio_returns['LowHP_HighQ'][period_name][:min_len]) - np.array(portfolio_returns['LowHP_LowQ'][period_name][:min_len])
+            ls_mean = ls_low_hp.mean()
+            ls_tstat = (ls_low_hp.mean() / ls_low_hp.std()) * np.sqrt(len(ls_low_hp))
+            print(f"{period_name:12} Low HP:  {ls_mean:7.4f} (t={ls_tstat:5.2f})", end="")
+        else:
+            print(f"{period_name:12} Low HP:  N/A", end="")
+        
+        # High HP: HighQ - LowQ
+        if len(portfolio_returns['HighHP_HighQ'][period_name]) > 0 and len(portfolio_returns['HighHP_LowQ'][period_name]) > 0:
+            min_len = min(len(portfolio_returns['HighHP_HighQ'][period_name]), len(portfolio_returns['HighHP_LowQ'][period_name]))
+            ls_high_hp = np.array(portfolio_returns['HighHP_HighQ'][period_name][:min_len]) - np.array(portfolio_returns['HighHP_LowQ'][period_name][:min_len])
+            ls_mean = ls_high_hp.mean()
+            ls_tstat = (ls_high_hp.mean() / ls_high_hp.std()) * np.sqrt(len(ls_high_hp))
+            print(f"    High HP: {ls_mean:7.4f} (t={ls_tstat:5.2f})")
+        else:
+            print(f"    High HP: N/A")
     
     return table
 
